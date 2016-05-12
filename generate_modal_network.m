@@ -73,62 +73,59 @@ for imode = 1:length(mode_info)
 
 end
 
-C_valid = false;
-while C_valid == false
+% Add some noise if there are fewer than mp poles
+npoles = size(modal_matrix,2);
+if npoles < nmodes*nnodes
+    % Create filler eigenvectors, very small weighting into the spatial
+    % dimensions.
+    modal_matrix_full = cat(2,modal_matrix,ones(nnodes,(nnodes*nmodes)-length(mode_poles))/25);
+    % Create filler poles, evenly spaced across the rest of the
+    % spectrum.
+    start_angle = max(angle(mode_poles));
+    new_angles = linspace(start_angle, 2*pi - start_angle, (nnodes*nmodes)-length(mode_poles)+2 );
+    new_angles = new_angles(2:end-1); % remove repeat poles
+    mode_poles_full = cat(2,mode_poles,.75*[cos(new_angles) + 1j*sin(new_angles)]);
+end
 
-    % Add some noise if there are fewer than mp poles
-    npoles = size(modal_matrix,2);
-    if npoles < nmodes*nnodes
-        % Create filler eigenvectors, very small weighting into the spatial
-        % dimensions.
-        modal_matrix_full = cat(2,modal_matrix,ones(nnodes,(nnodes*nmodes)-length(mode_poles))/25);
-        % Create filler poles, evenly spaced across the rest of the
-        % spectrum.
-        start_angle = max(angle(mode_poles));
-        new_angles = linspace(start_angle, 2*pi - start_angle, (nnodes*nmodes)-length(mode_poles)+2 );
-        new_angles = new_angles(2:end-1); % remove repeat poles
-        mode_poles_full = cat(2,mode_poles,.75*[cos(new_angles) + 1j*sin(new_angles)]);
-    end
-
-    % Create eigenvector matrix in Vandermonde form
-    eigenvecs = zeros(nmodes*nnodes,nmodes*nnodes);
-    eigenvecs((nmodes*nnodes)-nnodes+1:nmodes*nnodes,:) = modal_matrix_full;
-    if length(mode_info) > 1
-        for idx = 1:length(mode_info)-1
-            for ipole = 1:nnodes*nmodes
-                eigenvecs(((nmodes-idx)*nnodes)-nnodes+1:(nmodes-idx)*nnodes,ipole) = ...
-                    modal_matrix_full(:,ipole).*(mode_poles_full(ipole).^idx);
-            end
+% Create eigenvector matrix in Vandermonde form
+eigenvecs = zeros(nmodes*nnodes,nmodes*nnodes);
+eigenvecs((nmodes*nnodes)-nnodes+1:nmodes*nnodes,:) = modal_matrix_full;
+if length(mode_info) > 1
+    for idx = 1:length(mode_info)-1
+        for ipole = 1:nnodes*nmodes
+            eigenvecs(((nmodes-idx)*nnodes)-nnodes+1:(nmodes-idx)*nnodes,ipole) = ...
+                modal_matrix_full(:,ipole).*(mode_poles_full(ipole).^idx);
         end
     end
+end
 
-    % Create time domain parameters in companion form
-    C = eigenvecs*diag(mode_poles_full)*pinv(eigenvecs);
+% Create time domain parameters in companion form
+C = eigenvecs*diag(mode_poles_full)*pinv(eigenvecs);
 
-    % Sanity check, C should be real to reasonable precision
-    if sum(sum(imag(C))) > 1e-13;
-        disp(sum(sum(imag(C))))
-        test1 = false;
-        if verbose==true;warning('Parameters have large imaginary component!');end
-    else
-        test1 = true;
-    end
+% Sanity check, C should be real to reasonable precision
+if sum(sum(imag(C))) > 1e-13;
+    disp(sum(sum(imag(C))))
+    test1 = false;
+    if verbose==true;warning('Parameters have large imaginary component!');end
+else
+    test1 = true;
+end
 
-    C = real(C);
+C = real(C);
 
-    % Sanity check, The bottom rows of C should be sparse ones
-    if abs( sum(sum(C(nnodes+1:end,:))) - ( nnodes * (nmodes - 1) ) ) >  1e-13
-        test2 = false;
-        if verbose==true;warning('Parameters are not in full companion form!');end
-    else
-        test2 = true;
-    end
+% Sanity check, The bottom rows of C should be sparse ones
+if abs( sum(sum(C(nnodes+1:end,:))) - ( nnodes * (nmodes - 1) ) ) >  1e-13
+    test2 = false;
+    if verbose==true;warning('Parameters are not in full companion form!');end
+else
+    test2 = true;
+end
 
-    % Accept parameters if we pass both sanity checks
-    if test1 == true && test2 == true
-        C_valid = true;
-    end
-
+% Accept parameters if we pass both sanity checks
+if test1 == true && test2 == true
+    C_valid = true;
+else
+    error('Generated parameter matrix is not valid, please check input options');
 end
 
 % Companion to standard form

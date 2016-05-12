@@ -73,33 +73,58 @@ for imode = 1:length(mode_info)
 
 end
 
-% Add some noise if there are fewer than mp poles
-npoles = size(modal_matrix,2);
-if npoles < nmodes*nnodes
-    modal_matrix = cat(2,modal_matrix,zeros(nnodes,(nnodes*nmodes)-length(mode_poles)));
-    mode_poles = cat(2,mode_poles,randn(1,(nnodes*nmodes)-length(mode_poles))/25);
-end
+C_valid = false;
+while C_valid == false
 
-% Create eigenvector matrix in Vandermonde form
-eigenvecs = zeros(nmodes*nnodes,nmodes*nnodes);
-eigenvecs((nmodes*nnodes)-nnodes+1:nmodes*nnodes,:) = modal_matrix;
-if length(mode_info) > 1
-    for idx = 1:length(mode_info)-1
-        for ipole = 1:nnodes*nmodes
-        eigenvecs(((nmodes-idx)*nnodes)-nnodes+1:(nmodes-idx)*nnodes,ipole) = ...
-                modal_matrix(:,ipole).*(mode_poles(ipole).^idx);
+    % Add some noise if there are fewer than mp poles
+    % this is to ensure that the eigenvectors will have a well formed inverse
+    % This is noisy, so we may repeat if the time-parameters are not
+    % acceptable.
+    npoles = size(modal_matrix,2);
+    if npoles < nmodes*nnodes
+        modal_matrix_full = cat(2,modal_matrix,randn(nnodes,(nnodes*nmodes)-length(mode_poles))/25);
+        mode_poles_full = cat(2,mode_poles,randn(1,(nnodes*nmodes)-length(mode_poles))/25);
+    end
+
+    % Create eigenvector matrix in Vandermonde form
+    eigenvecs = zeros(nmodes*nnodes,nmodes*nnodes);
+    eigenvecs((nmodes*nnodes)-nnodes+1:nmodes*nnodes,:) = modal_matrix_full;
+    if length(mode_info) > 1
+        for idx = 1:length(mode_info)-1
+            for ipole = 1:nnodes*nmodes
+                eigenvecs(((nmodes-idx)*nnodes)-nnodes+1:(nmodes-idx)*nnodes,ipole) = ...
+                    modal_matrix_full(:,ipole).*(mode_poles_full(ipole).^idx);
+            end
         end
     end
-end
 
-% Create time domain parameters in companion form
-C = eigenvecs*diag(mode_poles)*pinv(eigenvecs);
+    % Create time domain parameters in companion form
+    C = eigenvecs*diag(mode_poles_full)*pinv(eigenvecs);
 
-% Sanity check, C should be real to reasonable precision
-if sum(sum(imag(C))) > 1e-10;
-    disp('Parameters have large imaginary component!');
-else
+    % Sanity check, C should be real to reasonable precision
+    if sum(sum(imag(C))) > 1e-13;
+        disp(sum(sum(imag(C))))
+        test1 = false;
+        if verbose==true;warning('Parameters have large imaginary component!');end
+    else
+        test1 = true;
+    end
+
     C = real(C);
+
+    % Sanity check, The bottom rows of C should be sparse ones
+    if abs( sum(sum(C(nnodes+1:end,:))) - ( nnodes * (nmodes - 1) ) ) >  1e-13
+        test2 = false;
+        if verbose==true;warning('Parameters are not in full companion form!');end
+    else
+        test2 = true;
+    end
+
+    % Accept parameters if we pass both sanity checks
+    if test1 == true && test2 == true
+        C_valid = true;
+    end
+
 end
 
 % Companion to standard form

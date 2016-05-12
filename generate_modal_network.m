@@ -138,7 +138,7 @@ A = A_form_swap(-C,nnodes,size(C,1)/nnodes);
 if seconds > 0
     data = generate_data(A,seconds,sample_rate);
 
-    if nargin == 4 && ~isempty(noise_db)
+    if nargin >= 4 && ~isempty(noise_db)
         for idx = 1:nnodes
             data(idx,:) = data(idx,:) + scalesignal( randn(1,size(data,2)),noise_db,data(idx,:) );
         end

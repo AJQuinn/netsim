@@ -1,4 +1,4 @@
-function [ A, modal_matrix, data ] = generate_modal_network( mode_info, sample_rate, seconds )
+function [ A, modal_matrix, data ] = generate_modal_network( mode_info, sample_rate, seconds, noise_db, verbose )
 %%function [ A, modal_matrix, data ] = generate_modal_network( mode_info, seconds, sample_rate )
 %
 % Generates the autoregressive parameters for a system based on a set of
@@ -21,6 +21,9 @@ function [ A, modal_matrix, data ] = generate_modal_network( mode_info, sample_r
 %        Sampling frequency of the system in Hz
 %   seconds: float
 %        How much data to generate, if 0 or empty, nothing is generated.
+%   noise_db: int
+%        Noise level in decibels relative to signal, if empty, no noise is
+%        added
 %
 % Returns:
 %   A: matrix
@@ -37,6 +40,7 @@ nnodes = length(mode_info{1}.node_amp);
 nmodes = length(mode_info);
 nyq = sample_rate/2;
 mode_poles = [];
+if nargin < 5; verbose = false; end
 
 % Generate the poles and phases
 for imode = 1:length(mode_info)
@@ -104,6 +108,13 @@ A = A_form_swap(-C,nnodes,size(C,1)/nnodes);
 % Generate dataset if requested
 if seconds > 0
     data = generate_data(A,seconds,sample_rate);
+
+    if nargin == 4 && ~isempty(noise_db)
+        for idx = 1:nnodes
+            data(idx,:) = data(idx,:) + scalesignal( randn(1,size(data,2)),noise_db,data(idx,:) );
+        end
+    end
+
 end
 
 end

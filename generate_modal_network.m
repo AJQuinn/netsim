@@ -77,13 +77,17 @@ C_valid = false;
 while C_valid == false
 
     % Add some noise if there are fewer than mp poles
-    % this is to ensure that the eigenvectors will have a well formed inverse
-    % This is noisy, so we may repeat if the time-parameters are not
-    % acceptable.
     npoles = size(modal_matrix,2);
     if npoles < nmodes*nnodes
-        modal_matrix_full = cat(2,modal_matrix,randn(nnodes,(nnodes*nmodes)-length(mode_poles))/25);
-        mode_poles_full = cat(2,mode_poles,randn(1,(nnodes*nmodes)-length(mode_poles))/25);
+        % Create filler eigenvectors, very small weighting into the spatial
+        % dimensions.
+        modal_matrix_full = cat(2,modal_matrix,ones(nnodes,(nnodes*nmodes)-length(mode_poles))/25);
+        % Create filler poles, evenly spaced across the rest of the
+        % spectrum.
+        start_angle = max(angle(mode_poles));
+        new_angles = linspace(start_angle, 2*pi - start_angle, (nnodes*nmodes)-length(mode_poles)+2 );
+        new_angles = new_angles(2:end-1); % remove repeat poles
+        mode_poles_full = cat(2,mode_poles,.75*[cos(new_angles) + 1j*sin(new_angles)]);
     end
 
     % Create eigenvector matrix in Vandermonde form

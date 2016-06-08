@@ -99,11 +99,19 @@ if length(mode_info) > 1
     end
 end
 
+% Sanity check, eigenvectors should be linearly independent
+if rank(eigenvecs) < size(eigenvecs,1)
+    [~,jb] = rref(eigenvecs);
+    disp(['Eigenvectors are low rank:' num2str(rank(eigenvecs)) ' < ' num2str(size(eigenvecs,1))])
+    disp(['Rows ' num2str(setdiff(1:nmodes,jb)) ' potentially co-linear'])
+    error('Eigenvectors are low rank')
+end
+
 % Create time domain parameters in companion form
 C = eigenvecs*diag(mode_poles_full)*pinv(eigenvecs);
 
 % Sanity check, C should be real to reasonable precision
-if sum(sum(imag(C))) > 1e-13;
+if sum(sum(abs(imag(C)))) > 1e-10;
     disp(sum(sum(imag(C))))
     test1 = false;
     if verbose==true;warning('Parameters have large imaginary component!');end
@@ -114,7 +122,7 @@ end
 C = real(C);
 
 % Sanity check, The bottom rows of C should be sparse ones
-if abs( sum(sum(C(nnodes+1:end,:))) - ( nnodes * (nmodes - 1) ) ) >  1e-13
+if  sum(sum(abs(C(nnodes+1:end,:)))) - ( nmodes - nnodes ) > 1e-10;
     test2 = false;
     if verbose==true;warning('Parameters are not in full companion form!');end
 else

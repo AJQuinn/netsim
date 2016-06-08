@@ -102,20 +102,23 @@ if poles_to_add > 0
     % Add them to the list
     mode_poles_full = cat(2,mode_poles,new_poles);
 
+    % Generate orthogonal vectors to use as eigenvectors
+    rebasis = orth(reshape( (1:prod(poles_to_add*nnodes))-nnodes, nnodes, poles_to_add) );
+    imbasis = orth(reshape( (prod(poles_to_add*nnodes):-1:1)-nnodes, nnodes, poles_to_add) );
+
     % Create filler eigenvectors, very small weighting into the spatial
     % dimensions. Take care of new conjugate pairs here
     modal_matrix_full = modal_matrix;
     for idx = 1:floor(poles_to_add/2)
         % add matching vecs for conjugate poles
-        new_vec = complex(randn(nnodes,1),randn(nnodes,1))/500;
-        %new_vec = complex(.0005*ones(nnodes,1),.000001*ones(nnodes,1));
+        new_vec = complex(rebasis(:,idx),imbasis(:,idx)) / 1000;
         modal_matrix_full = cat(2,modal_matrix_full,...
                 [new_vec conj(new_vec)]);
     end
     % Add vectors for a real pole if necessary
     if mod(poles_to_add,2) == 1
     if imag(new_poles(end)) < 1e-10
-        modal_matrix_full = cat(2,modal_matrix_full,complex(randn(nnodes,1),randn(nnodes,1))/500);
+        modal_matrix_full = cat(2,modal_matrix_full,complex(rebasis(:,end),imbasis(:,end))/1000);
     end
     end
 

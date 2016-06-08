@@ -37,10 +37,10 @@ function [ A, modal_matrix, data ] = generate_modal_network( mode_info, sample_r
 
 % Housekeeping
 nnodes = length(mode_info{1}.node_amp);
-nmodes = length(mode_info);
+nmodes = 0;
 nyq = sample_rate/2;
 mode_poles = [];
-if nargin < 5; verbose = false; end
+if nargin < 5; verbose = true; end
 
 % Generate the poles and phases
 for imode = 1:length(mode_info)
@@ -69,31 +69,72 @@ for imode = 1:length(mode_info)
 
     if mode_info{imode}.freq > 0
         modal_matrix = cat(2,modal_matrix,conj(modal_v));
+        nmodes = nmodes + 2;
+    else
+        modal_matrix(:,end) = abs(modal_matrix(:,end));
+        nmodes = nmodes + 1;
     end
 
 end
 
 % Add some noise if there are fewer than mp poles
-npoles = size(modal_matrix,2);
-if npoles < nmodes*nnodes
-    % Create filler eigenvectors, very small weighting into the spatial
-    % dimensions.
-    modal_matrix_full = cat(2,modal_matrix,ones(nnodes,(nnodes*nmodes)-length(mode_poles))/25);
+if nmodes ~= nnodes
+    p = (floor(nmodes/nnodes)) + 1;
+else
+    p = (floor(nmodes/nnodes));
+end
+
+poles_to_add = (nnodes*p)-nmodes;
+if poles_to_add > 0
+
     % Create filler poles, evenly spaced across the rest of the
     % spectrum.
     start_angle = max(angle(mode_poles));
-    new_angles = linspace(start_angle, 2*pi - start_angle, (nnodes*nmodes)-length(mode_poles)+2 );
-    new_angles = new_angles(2:end-1); % remove repeat poles
-    mode_poles_full = cat(2,mode_poles,.75*[cos(new_angles) + 1j*sin(new_angles)]);
+    % Find angles for new filler poles, relative to largest frequency
+    % defined poles
+    new_angles = linspace(start_angle, 2*pi - start_angle, poles_to_add+2 );
+    new_angles = new_angles(2:end-1); % remove defined poles
+    % create filler pole coordinates at fixed magnitude
+    new_poles = .25*( cos(new_angles) + 1j*sin(new_angles) );
+    % Sort into increasing frequency, should make conjugate pair adjacent
+    [~,I] = sort(abs(angle(new_poles)));
+    new_poles = new_poles(I);
+    % Add them to the list
+    mode_poles_full = cat(2,mode_poles,new_poles);
+
+    % Create filler eigenvectors, very small weighting into the spatial
+    % dimensions. Take care of new conjugate pairs here
+    modal_matrix_full = modal_matrix;
+    for idx = 1:floor(poles_to_add/2)
+        % add matching vecs for conjugate poles
+        new_vec = complex(randn(nnodes,1),randn(nnodes,1))/500;
+        %new_vec = complex(.0005*ones(nnodes,1),.000001*ones(nnodes,1));
+        modal_matrix_full = cat(2,modal_matrix_full,...
+                [new_vec conj(new_vec)]);
+    end
+    % Add vectors for a real pole if necessary
+    if mod(poles_to_add,2) == 1
+    if imag(new_poles(end)) < 1e-10
+        modal_matrix_full = cat(2,modal_matrix_full,complex(randn(nnodes,1),randn(nnodes,1))/500);
+    end
+    end
+
+else
+
+    modal_matrix_full = modal_matrix;
+    mode_poles_full = mode_poles;
+
 end
+nmodes = length(modal_matrix_full);
 
 % Create eigenvector matrix in Vandermonde form
-eigenvecs = zeros(nmodes*nnodes,nmodes*nnodes);
-eigenvecs((nmodes*nnodes)-nnodes+1:nmodes*nnodes,:) = modal_matrix_full;
-if length(mode_info) > 1
-    for idx = 1:length(mode_info)-1
-        for ipole = 1:nnodes*nmodes
-            eigenvecs(((nmodes-idx)*nnodes)-nnodes+1:(nmodes-idx)*nnodes,ipole) = ...
+eigenvecs = zeros(nmodes,nmodes);
+eigenvecs((nmodes)-nnodes+1:nmodes,:) = modal_matrix_full;
+if nmodes > nnodes
+    %for idx = 1:( (nmodes / nnodes) - 1 )
+    for idx = ( (nmodes / nnodes) - 1 ):-1:1
+        for ipole = 1:length(mode_poles_full)
+            eigenvecs((1:6)+((idx-1)*nnodes),ipole) = ...
                 modal_matrix_full(:,ipole).*(mode_poles_full(ipole).^idx);
         end
     end
@@ -108,7 +149,8 @@ if rank(eigenvecs) < size(eigenvecs,1)
 end
 
 % Create time domain parameters in companion form
-C = eigenvecs*diag(mode_poles_full)*pinv(eigenvecs);
+C = eigenvecs*diag(mode_poles_full)*inv(eigenvecs)
+mode_poles_full
 
 % Sanity check, C should be real to reasonable precision
 if sum(sum(abs(imag(C)))) > 1e-10;

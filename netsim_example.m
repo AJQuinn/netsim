@@ -20,28 +20,28 @@
 %
 % It is best to have the same number of mode and channels per state.
 % Signal-to-noise can be manipulated by changing the node_amp values directly
-
+%clear all; close all
 
 % Define state 1
 clearvars mode_info
 mode_info{1}.freq = 0;
-mode_info{1}.mode_amp = .98;
+mode_info{1}.mode_amp = .9;
 mode_info{1}.node_amp = [1 1 1];
-mode_info{1}.phase = [ pi 0 0 ];
+mode_info{1}.phase = [ pi/3 0 0 ];
 mode_info{2}.freq  = 10;
 mode_info{2}.mode_amp   = .94;
-mode_info{2}.node_amp   = [ .2 1.5 1 ];
-mode_info{2}.phase = [ 0 pi 0 ];
+mode_info{2}.node_amp   = [ .5 1.5 1 ];
+mode_info{2}.phase = [ 0 pi/2 0 ];
 mode_info{3}.freq  = 27;
 mode_info{3}.mode_amp   = .9;
 mode_info{3}.node_amp   = [ 1 1 1 ];
-mode_info{3}.phase = [ 0 0 0 ];
+mode_info{3}.phase = [ 0 0 .1 ];
 signal{1} = mode_info;
 
 % Define state 2
 clearvars mode_info
 mode_info{1}.freq = 0;
-mode_info{1}.mode_amp = .98;
+mode_info{1}.mode_amp = .9;
 mode_info{1}.node_amp = [1 1 1];
 mode_info{1}.phase = [ pi 0 0 ];
 mode_info{2}.freq  = 13;
@@ -57,7 +57,7 @@ signal{2} = mode_info;
 % Define state 3
 clearvars mode_info
 mode_info{1}.freq = 0;
-mode_info{1}.mode_amp = .98;
+mode_info{1}.mode_amp = .9;
 mode_info{1}.node_amp = [1 1 1];
 mode_info{1}.phase = [ pi 0 0 ];
 mode_info{2}.freq  = 10;
@@ -150,7 +150,8 @@ save('Modal_simulation','data','sample_rate','time_vect','signal','state_ts');
 % Expand state time-course into easily plottable form
 for iscale = 1:3
     statewise{iscale} = zeros(3,seconds*sample_rate);
-    for istate = 1:3
+    for istate = 1:3ls
+        
         statewise{iscale}(istate,:) = state_ts{iscale}' == istate;
     end
 end

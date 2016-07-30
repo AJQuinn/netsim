@@ -57,8 +57,12 @@ for imode = 1:length(mode_info)
     end
 
     % Complex value indicating relative amplitude and phase per node
-    modal_v = mode_info{imode}.node_amp' .* ...
+    if isreal(mode_info{imode}.node_amp)
+        modal_v = mode_info{imode}.node_amp' .* ...
                 (cos(mode_info{imode}.phase) + 1j*sin(mode_info{imode}.phase))';
+    else
+        modal_v = mode_info{imode}.node_amp.';
+    end
 
     % Stack full modal matrix
     if imode == 1
@@ -78,14 +82,21 @@ for imode = 1:length(mode_info)
 end
 
 % Add some noise if there are fewer than mp poles
-if nmodes ~= nnodes
+if nnodes == 1
+    % Single channel, order equals modes
+    p = nmodes;
+elseif nmodes < nnodes
+    % Fewer modes than nodes
     p = (floor(nmodes/nnodes)) + 1;
 else
+    % More modes than nodes
     p = (floor(nmodes/nnodes));
 end
 
 poles_to_add = (nnodes*p)-nmodes;
 if poles_to_add > 0
+
+    disp('Adding dummy poles, may have unexpected results');
 
     % Create filler poles, evenly spaced across the rest of the
     % spectrum.
@@ -103,8 +114,10 @@ if poles_to_add > 0
     mode_poles_full = cat(2,mode_poles,new_poles);
 
     % Generate orthogonal vectors to use as eigenvectors
-    rebasis = orth(reshape( (1:prod(poles_to_add*nnodes))-nnodes, nnodes, poles_to_add) );
-    imbasis = orth(reshape( (prod(poles_to_add*nnodes):-1:1)-nnodes, nnodes, poles_to_add) );
+    imbasis = orth(reshape( (1:prod(poles_to_add*nnodes))-nnodes, nnodes, poles_to_add) );
+    rebasis = orth(reshape( (prod(poles_to_add*nnodes):-1:1)-nnodes, nnodes, poles_to_add) );
+    imbais = gallery('orthog',nnodes,-2);
+    rebasis = gallery('orthog',nnodes,-2)';
 
     % Create filler eigenvectors, very small weighting into the spatial
     % dimensions. Take care of new conjugate pairs here
@@ -137,7 +150,7 @@ if nmodes > nnodes
     %for idx = 1:( (nmodes / nnodes) - 1 )
     for idx = ( (nmodes / nnodes) - 1 ):-1:1
         for ipole = 1:length(mode_poles_full)
-            eigenvecs((1:6)+((idx-1)*nnodes),ipole) = ...
+            eigenvecs((1:nnodes)+((idx-1)*nnodes),ipole) = ...
                 modal_matrix_full(:,ipole).*(mode_poles_full(ipole).^idx);
         end
     end
@@ -151,9 +164,28 @@ if rank(eigenvecs) < size(eigenvecs,1)
     error('Eigenvectors are low rank')
 end
 
+% Sanity check, is the eigenvector matrix properly invertible
+% we could also just check cond, but the absolute value at which the
+% condition is 'high' is hard to say. Better to absolutely determine the
+% error
+if abs(sum(sum(eigenvecs*inv(eigenvecs) - eye(nmodes)))) > 1e-10
+    disp(['Right Eigenvector matrix is poorly conditioned: ' num2str(cond(eigenvecs))]);
+end
+
+left = inv(eigenvecs');
+if abs(sum(sum(left*inv(left) - eye(nmodes)))) > 1e-10
+    disp(['Left Eigenvector matrix is poorly conditioned: ' num2str(cond(eigenvecs))]);
+end
+
 % Create time domain parameters in companion form
-C = eigenvecs*diag(mode_poles_full)*inv(eigenvecs)
-mode_poles_full
+C = eigenvecs*diag(mode_poles_full)*inv(eigenvecs);
+%mode_poles_full
+
+% Sanity check, can we reconstruct with left eigenvectors
+Cl = inv(left') * diag(mode_poles_full) * left';
+if sum(sum(abs(C - Cl))) > 1e-10
+    disp('Left eigenvectors do not recover companion form!');
+end
 
 % Sanity check, C should be real to reasonable precision
 if sum(sum(abs(imag(C)))) > 1e-10;
@@ -182,7 +214,7 @@ else
 end
 
 % Companion to standard form
-A = A_form_swap(-C,nnodes,size(C,1)/nnodes);
+A = A_form_swap(-C,'comp2full',nnodes,size(C,1)/nnodes);
 
 % Generate dataset if requested
 if seconds > 0
